@@ -7,20 +7,13 @@ import io
 from datetime import datetime
 from streamlit_drawable_canvas import st_canvas
 
-# PDF Generation imports
+# PDF overlay imports
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
 
 # Set page configuration
 st.set_page_config(page_title="Nirvana Service Advisor Onboarding", layout="centered")
-
-# Helper function to remove Chinese/Non-Latin characters to prevent ReportLab Helvetica crash
-def clean_pdf_text(text):
-    if not text:
-        return ""
-    return re.sub(r'[^\x00-\x7F]+', '', str(text)).strip()
 
 # Initialize EasyOCR Reader
 @st.cache_resource
@@ -32,7 +25,7 @@ reader = load_ocr()
 # --- APP HEADER ---
 st.title("富貴 NIRVANA")
 st.subheader("SERVICE ADVISOR APPLICATION FORM / 代理商申请表格")
-st.caption("Form Ref: NV-SG-CSD-F01 Rev.2")
+st.caption("Template Reference: (ISO FORM) NV-SG-CSD-F01 Rev.2 Service Advisor Application Form - with effect 01.05.2023.pdf")
 
 st.markdown("---")
 
@@ -90,218 +83,181 @@ with col_ocr2:
 st.markdown("---")
 
 # ==========================================
-# 📋 THE OFFICIAL FULL APPLICATION FORM
+# INTERACTIVE APPLICATION FORM
 # ==========================================
 st.markdown("## 📋 INTERACTIVE APPLICATION FORM")
 
 with st.form("official_nirvana_form"):
     
-    # 1. PARTICULARS OF RECRUITING SERVICE ADVISOR (UPLINE)
-    st.markdown("#### 👤 PART 1: PARTICULARS OF RECRUITING SERVICE ADVISOR (UPLINE) / 推荐代理商(上线)资料")
-    upline_name = st.text_input("Upline Name / 上线姓名")
+    st.markdown("#### 👤 PART 1: PARTICULARS OF RECRUITING SERVICE ADVISOR (UPLINE)")
+    upline_name = st.text_input("Upline Name / 上线姓名", value="Milk")
     col_u1, col_u2 = st.columns(2)
     with col_u1:
-        upline_nric = st.text_input("Upline NRIC No / 上线身份证号码")
+        upline_nric = st.text_input("Upline NRIC No / 上线身份证号码", value="S76545677A")
     with col_u2:
-        upline_code = st.text_input("Agency & Advisor Code / 区代理及代理商号码")
+        upline_code = st.text_input("Agency & Advisor Code / 区代理及代理商号码", value="763")
         
     st.markdown("---")
     
-    # 2. PARTICULARS OF APPLICANT
-    st.markdown("#### 👤 PART 2: PARTICULARS OF APPLICANT / 申请者资料")
-    full_name = st.text_input("Full Name (as in NRIC/Passport) / 身份证/护照上的全名", value=st.session_state.full_name)
-    id_display_name = st.text_input("Name to Display on ID Card / 卡片显示名")
+    st.markdown("#### 👤 PART 2: PARTICULARS OF APPLICANT")
+    full_name = st.text_input("Full Name (as in NRIC/Passport)", value=st.session_state.full_name if st.session_state.full_name else "S6971518D")
+    id_display_name = st.text_input("Name to Display on ID Card", value="Jack")
     
     col_a1, col_a2 = st.columns(2)
     with col_a1:
-        nric_no = st.text_input("NRIC No / 身份证号码", value=st.session_state.nric_no)
-        dob = st.text_input("Date Of Birth / 出生日期 (YYYY-MM-DD)")
-        sex = st.radio("Sex / 性別", ["MALE 男", "FEMALE 女"], horizontal=True)
-        marital = st.radio("Marital Status / 婚姻狀況", ["Single 单身", "Married 已婚", "Others 其它"], horizontal=True)
+        nric_no = st.text_input("NRIC No / Passport No", value=st.session_state.nric_no if st.session_state.nric_no else "S6971518D")
+        dob = st.text_input("Date Of Birth (YYYY-MM-DD)", value="1990-01-01")
+        sex = st.text_input("Sex (MALE/FEMALE)", value="MALE")
+        marital = st.text_input("Marital Status (Single/Married)", value="Single")
     with col_a2:
-        nationality = st.text_input("Nationality / 国籍")
-        mobile_no = st.text_input("Mobile No / 手提")
-        home_no = st.text_input("Home No / 住家")
-        email_addr = st.text_input("E-Mail Address / 电子邮件地址")
+        nationality = st.text_input("Nationality", value="Singaporean")
+        mobile_no = st.text_input("Mobile Telephone", value="9888256")
+        home_no = st.text_input("Home Telephone", value="")
+        email_addr = st.text_input("E-Mail Address", value="")
         
-    address = st.text_area("Correspondence Address / 通讯地址")
+    address = st.text_area("Correspondence Address")
     
     col_b1, col_b2 = st.columns(2)
     with col_b1:
-        bank_name = st.text_input("Bank Name / 銀行名稱", value=st.session_state.bank_name)
+        bank_name = st.text_input("Bank Name", value=st.session_state.bank_name if st.session_state.bank_name else "POSB")
     with col_b2:
-        bank_account = st.text_input("Bank Account No / 銀行户口号码", value=st.session_state.bank_acc)
+        bank_account = st.text_input("Bank Account Number", value=st.session_state.bank_acc if st.session_state.bank_acc else "120481254")
         
-    social_1 = st.text_input("Social Handle 1 / 社交媒体账号")
-    social_2 = st.text_input("Social Handle 2 / 社交媒体账号")
+    social_1 = st.text_input("Social Handle 1")
+    social_2 = st.text_input("Social Handle 2")
 
     st.markdown("---")
 
-    # 3. EMERGENCY CONTACT
-    st.markdown("#### 🚨 PART 3: EMERGENCY CONTACT / 紧急连联络号码")
+    st.markdown("#### 🚨 PART 3: EMERGENCY CONTACT PARTICULARS")
     col_e1, col_e2, col_e3 = st.columns(3)
     with col_e1:
-        emerg_name = st.text_input("Emergency Contact Name / 姓名")
+        emerg_name = st.text_input("Contact Person Name", value="Jack")
     with col_e2:
-        emerg_phone = st.text_input("Contact No / 联络号码")
+        emerg_phone = st.text_input("Contact Telephone No", value="9288356")
     with col_e3:
-        emerg_relat = st.text_input("Relationship / 关系")
+        emerg_relat = st.text_input("Relationship", value="Spouse")
 
     st.markdown("---")
 
-    # 4. OTHER INFORMATIONS
-    st.markdown("#### ℹ️ PART 4: OTHERS INFORMATIONS / 其他资料")
-    convicted = st.radio("Have you and/or your spouse ever been convicted of any violation of criminal law before? / 您或你的配偶之前,有任何违反刑法或被定罪吗?", ["NO 沒有", "YES 有"], horizontal=True)
-    bankrupt = st.radio("Have you ever been bankrupt before? / 您是否曾是破产者?", ["NO 沒有", "YES 有"], horizontal=True)
+    st.markdown("#### ℹ️ PART 4: BACKGROUND QUESTIONS & CHARACTER REFERENCE")
+    convicted = st.text_input("Criminal Violation History? (YES/NO)", value="NO")
+    bankrupt = st.text_input("Declared Bankrupt History? (YES/NO)", value="NO")
     
-    st.write("**Reference (Non-relative) / 推荐人资料:**")
     col_r1, col_r2 = st.columns(2)
     with col_r1:
-        ref_name = st.text_input("Reference Name / 姓名")
-        ref_company = st.text_input("Company Name & Occupation / 公司 & 职业")
+        ref_name = st.text_input("Reference Full Name", value="Mini")
+        ref_company = st.text_input("Company Name & Job", value="Fkall")
     with col_r2:
-        ref_relat = st.text_input("Relationship with Service Advisor / 与代理的关系")
-        ref_phone = st.text_input("Telephone / 电话")
+        ref_relat = st.text_input("Relationship Status", value="Friends")
+        ref_phone = st.text_input("Telephone Contact", value="98888188")
 
     st.markdown("---")
     
-    # 5. SIGNATURE DECLARATION
-    st.markdown("#### ✍️ PART 5: DECLARATION & SIGNATURE / 宣告与签名")
-    st.caption("By signing, you acknowledge you have read, understood and agree to the Nirvana Code of Ethics and Privacy Policies.")
-    
+    st.markdown("#### ✍️ PART 5: APPLICANT COMPLIANCE EXECUTION DECLARATION")
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 1)",
         stroke_width=3,
         stroke_color="#111111",
         background_color="#f9fafb",
-        height=150,
-        width=450,
+        height=120,
+        width=400,
         drawing_mode="freedraw",
         key="signature",
     )
     
     current_date_str = datetime.today().strftime('%Y-%m-%d')
-    st.text_input("Application Date / 日期", value=current_date_str, disabled=True)
-
-    submitted = st.form_submit_button("VALIDATE & GENERATE OFFICIAL FORM PDF")
+    submitted = st.form_submit_button("STAMP & GENERATE OFFICIAL OVERLAY PDF")
 
 # ==========================================
-# REPORTLAB PDF GENERATION ENGINE
+# THE OVERLAY MERGE ENGINE
 # ==========================================
 if submitted:
-    if not full_name or not nric_no or not bank_account:
-        st.error("❌ Mandatory Field Error: Please fill up Applicant Name, NRIC, and Bank Account details.")
-    elif canvas_result.image_data is None or len(canvas_result.json_data["objects"]) == 0:
-        st.error("❌ Signature Error: Please complete your E-signature box before generating.")
+    if canvas_result.image_data is None or len(canvas_result.json_data["objects"]) == 0:
+        st.error("❌ Signature Error: Please complete your signature block.")
     else:
-        st.success("🎉 Forms Validated! Ready to download your official structural document.")
+        try:
+            # 1. Process Signature Image
+            sig_image = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+            sig_buffer = io.BytesIO()
+            sig_image.save(sig_buffer, format="PNG")
+            sig_buffer.seek(0)
 
-        # Save signature canvas stream
-        sig_image = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-        sig_buffer = io.BytesIO()
-        sig_image.save(sig_buffer, format="PNG")
-        sig_buffer.seek(0)
+            # 2. Draw standard form inputs onto an transparent temporary ReportLab PDF
+            packet = io.BytesIO()
+            # letter size is 612 x 792 points
+            can = canvas.Canvas(packet, pagesize=letter)
+            can.setFont("Helvetica", 9)
 
-        # Initialize PDF Document Architecture
-        pdf_buffer = io.BytesIO()
-        doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-        story = []
+            # Coordinates mapping table (approximate to match image placements)
+            # Adjust these numbers if needed to tweak the exact pixel box positions
+            can.drawString(110, 688, upline_name)
+            can.drawString(410, 688, upline_nric)
+            can.drawString(110, 668, upline_code)
 
-        # Style Sheets
-        title_style = ParagraphStyle('T1', fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor("#78350f"), alignment=1)
-        sub_style = ParagraphStyle('T2', fontName='Helvetica-Bold', fontSize=11, alignment=1)
-        meta_style = ParagraphStyle('T3', fontName='Helvetica', fontSize=8, textColor=colors.gray, alignment=1)
-        
-        section_heading = ParagraphStyle('SH', fontName='Helvetica-Bold', fontSize=9, textColor=colors.white, backColor=colors.HexColor("#1e3a8a"), borderPadding=4)
-        label_style = ParagraphStyle('L', fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor("#1f2937"))
-        val_style = ParagraphStyle('V', fontName='Helvetica', fontSize=8, textColor=colors.black)
+            can.drawString(130, 625, full_name)
+            can.drawString(410, 625, id_display_name)
+            can.drawString(110, 604, nric_no)
+            can.drawString(410, 604, dob)
+            can.drawString(110, 587, sex)
+            can.drawString(410, 587, nationality)
+            can.drawString(110, 570, marital)
+            can.drawString(410, 570, email_addr)
+            can.drawString(110, 554, mobile_no)
+            can.drawString(410, 554, home_no)
+            can.drawString(130, 537, address)
+            can.drawString(110, 510, bank_name)
+            can.drawString(410, 510, bank_account)
+            can.drawString(110, 492, social_1)
+            can.drawString(410, 492, social_2)
 
-        # Header Structure
-        story.append(Paragraph("NIRVANA MEMORIAL GARDEN PTE. LTD.", title_style))
-        story.append(Paragraph("SERVICE ADVISOR APPLICATION FORM", sub_style))
-        story.append(Paragraph("Form ID: NV-SG-CSD-F01 | A Member of Nirvana Asia Group", meta_style))
-        story.append(Spacer(1, 15))
+            can.drawString(110, 448, emerg_name)
+            can.drawString(410, 448, emerg_relat)
+            can.drawString(110, 431, emerg_phone)
 
-        # --- TABLE 1: UPLINE INFO ---
-        story.append(Paragraph("PARTICULARS OF RECRUITING SERVICE ADVISOR (UPLINE)", section_heading))
-        story.append(Spacer(1, 4))
-        upline_data = [
-            [Paragraph("Upline Name:", label_style), Paragraph(clean_pdf_text(upline_name), val_style), Paragraph("Upline NRIC:", label_style), Paragraph(clean_pdf_text(upline_nric), val_style)],
-            [Paragraph("Agency & Advisor Code:", label_style), Paragraph(clean_pdf_text(upline_code), val_style), "", ""]
-        ]
-        t_upline = Table(upline_data, colWidths=[120, 155, 100, 175])
-        t_upline.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('SPAN', (1,1), (3,1))]))
-        story.append(t_upline)
-        story.append(Spacer(1, 12))
+            can.drawString(130, 390, convicted)
+            can.drawString(410, 390, bankrupt)
+            can.drawString(110, 373, ref_name)
+            can.drawString(410, 373, ref_relat)
+            can.drawString(110, 356, ref_company)
+            can.drawString(410, 356, ref_phone)
+            
+            can.drawString(410, 260, current_date_str)
 
-        # --- TABLE 2: APPLICANT PARTICULARS ---
-        story.append(Paragraph("PARTICULARS OF APPLICANT", section_heading))
-        story.append(Spacer(1, 4))
-        applicant_data = [
-            [Paragraph("Full Name (NRIC/Passport):", label_style), Paragraph(clean_pdf_text(full_name), val_style), Paragraph("Display Name (ID Card):", label_style), Paragraph(clean_pdf_text(id_display_name), val_style)],
-            [Paragraph("NRIC / Passport No:", label_style), Paragraph(clean_pdf_text(nric_no), val_style), Paragraph("Date Of Birth:", label_style), Paragraph(clean_pdf_text(dob), val_style)],
-            [Paragraph("Sex:", label_style), Paragraph(clean_pdf_text(sex), val_style), Paragraph("Nationality:", label_style), Paragraph(clean_pdf_text(nationality), val_style)],
-            [Paragraph("Marital Status:", label_style), Paragraph(clean_pdf_text(marital), val_style), Paragraph("E-Mail Address:", label_style), Paragraph(clean_pdf_text(email_addr), val_style)],
-            [Paragraph("Mobile Telephone:", label_style), Paragraph(clean_pdf_text(mobile_no), val_style), Paragraph("Home Telephone:", label_style), Paragraph(clean_pdf_text(home_no), val_style)],
-            [Paragraph("Correspondence Address:", label_style), Paragraph(clean_pdf_text(address), val_style), "", ""],
-            [Paragraph("Bank Name:", label_style), Paragraph(clean_pdf_text(bank_name), val_style), Paragraph("Bank Account Number:", label_style), Paragraph(clean_pdf_text(bank_account), val_style)],
-            [Paragraph("Social Handle 1:", label_style), Paragraph(clean_pdf_text(social_1), val_style), Paragraph("Social Handle 2:", label_style), Paragraph(clean_pdf_text(social_2), val_style)]
-        ]
-        t_applicant = Table(applicant_data, colWidths=[120, 155, 100, 175])
-        t_applicant.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('SPAN', (1,5), (3,5))]))
-        story.append(t_applicant)
-        story.append(Spacer(1, 12))
+            # Draw Signature Image onto form template target
+            can.drawImage(RLImage(sig_buffer), 60, 180, width=120, height=50, mask='auto')
+            
+            can.save()
+            packet.seek(0)
 
-        # --- TABLE 3: EMERGENCY CONTACT ---
-        story.append(Paragraph("EMERGENCY CONTACT PARTICULARS", section_heading))
-        story.append(Spacer(1, 4))
-        emerg_data = [
-            [Paragraph("Contact Person Name:", label_style), Paragraph(clean_pdf_text(emerg_name), val_style), Paragraph("Relationship:", label_style), Paragraph(clean_pdf_text(emerg_relat), val_style)],
-            [Paragraph("Contact Telephone No:", label_style), Paragraph(clean_pdf_text(emerg_phone), val_style), "", ""]
-        ]
-        t_emerg = Table(emerg_data, colWidths=[120, 155, 100, 175])
-        t_emerg.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('SPAN', (1,1), (3,1))]))
-        story.append(t_emerg)
-        story.append(Spacer(1, 12))
+            # 3. Read background original template file and stamp the dynamic input layer on top
+            template_filename = "(ISO FORM) NV-SG-CSD-F01 Rev.2 Service Advisor Application Form - with effect 01.05.2023.pdf"
+            
+            existing_pdf = PdfReader(open(template_filename, "rb"))
+            new_pdf = PdfReader(packet)
+            output = PdfWriter()
 
-        # --- TABLE 4: OTHER DETAILED QUESTIONS & REFERENCES ---
-        story.append(Paragraph("BACKGROUND QUESTIONS & CHARACTER REFERENCE", section_heading))
-        story.append(Spacer(1, 4))
-        other_data = [
-            [Paragraph("Criminal Violation Record History?", label_style), Paragraph(clean_pdf_text(convicted), val_style), Paragraph("Declared Bankrupt History?", label_style), Paragraph(clean_pdf_text(bankrupt), val_style)],
-            [Paragraph("Reference Full Name:", label_style), Paragraph(clean_pdf_text(ref_name), val_style), Paragraph("Relationship Status:", label_style), Paragraph(clean_pdf_text(ref_relat), val_style)],
-            [Paragraph("Company Name & Job:", label_style), Paragraph(clean_pdf_text(ref_company), val_style), Paragraph("Telephone Contact:", label_style), Paragraph(clean_pdf_text(ref_phone), val_style)]
-        ]
-        t_other = Table(other_data, colWidths=[120, 155, 100, 175])
-        t_other.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
-        story.append(t_other)
-        story.append(Spacer(1, 15))
+            # Merge page 1 data strings layer onto template page 1
+            page = existing_pdf.pages[0]
+            page.merge_page(new_pdf.pages[0])
+            output.add_page(page)
 
-        # --- SECTION 5: SIGNATURE & EXECUTION STAMP ---
-        story.append(Paragraph("APPLICANT COMPLIANCE EXECUTION DECLARATION", section_heading))
-        story.append(Spacer(1, 5))
-        story.append(Paragraph("I certify that statements made by me in this application are true, accurate and complete. I declare I have read and will strictly comply with the Nirvana Agency Terms, Conditions and Code of Ethics.", val_style))
-        story.append(Spacer(1, 8))
-        
-        rl_sig_img = RLImage(sig_buffer, width=160, height=60)
-        rl_sig_img.hAlign = 'LEFT'
-        
-        exec_data = [
-            [Paragraph("Applicant Signature Authorization Stamp:", label_style), Paragraph(f"Execution Date: {current_date_str}", label_style)],
-            [rl_sig_img, ""]
-        ]
-        t_exec = Table(exec_data, colWidths=[275, 275])
-        t_exec.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
-        story.append(t_exec)
+            # Append remainder pages intact if document has more pages
+            for i in range(1, len(existing_pdf.pages)):
+                output.add_page(existing_pdf.pages[i])
 
-        # Build Document
-        doc.build(story)
-        pdf_data = pdf_buffer.getvalue()
+            # 4. Stream final merged result out to dynamic user download button
+            final_buffer = io.BytesIO()
+            output.write(final_buffer)
+            final_pdf_data = final_buffer.getvalue()
 
-        # Download trigger layout
-        st.download_button(
-            label="📥 Download Completed NV-SG-CSD-F01 PDF Form",
-            data=pdf_data,
-            file_name=f"NV-SG-CSD-F01_{nric_no}.pdf",
-            mime="application/pdf"
-        )
+            st.success("🎉 Seamless Template Form Generated!")
+            st.download_button(
+                label="📥 Download Official Stamped Form PDF",
+                data=final_pdf_data,
+                file_name=f"Official_NV-SG-CSD-F01_{nric_no}.pdf",
+                mime="application/pdf"
+            )
+        except FileNotFoundError:
+            st.error("❌ Base Template Error: Please verify that you uploaded '(ISO FORM) NV-SG-CSD-F01 Rev.2 Service Advisor Application Form - with effect 01.05.2023.pdf' to your root directory.")
+        except Exception as e:
+            st.error(f"Error compiling form template stack: {e}")
