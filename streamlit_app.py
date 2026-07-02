@@ -1,5 +1,6 @@
 import streamlit as st
-import pytesseract
+import easyocr
+import numpy as np
 from PIL import Image
 import re
 import io
@@ -15,6 +16,13 @@ from reportlab.lib import colors
 # Set page configuration
 st.set_page_config(page_title="Nirvana Service Advisor Onboarding", layout="centered")
 
+# Initialize EasyOCR Reader (cached so it only loads once)
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['en'])
+
+reader = load_ocr()
+
 # --- APP HEADER ---
 st.title("富貴 NIRVANA")
 st.subheader("SERVICE ADVISOR APPLICATION FORM / 代理商申请表格")
@@ -22,7 +30,7 @@ st.caption("Referencing Form: (ISO FORM) NV-SG-CSD-F01 Rev.2 Service Advisor App
 
 st.markdown("---")
 
-# Initialize Session States for Form Fields if not already present
+# Initialize Session States
 if "full_name" not in st.session_state: st.session_state.full_name = ""
 if "nric_no" not in st.session_state: st.session_state.nric_no = ""
 if "bank_name" not in st.session_state: st.session_state.bank_name = ""
@@ -43,17 +51,17 @@ else:
 if ic_image is not None:
     try:
         img = Image.open(ic_image)
+        img_np = np.array(img)
         with st.spinner("Extracting NRIC information..."):
-            extracted_text = pytesseract.image_to_string(img)
+            results = reader.readtext(img_np, detail=0)
+            extracted_text = " ".join(results)
             
-            # Pattern matching for Singapore NRIC format (e.g., S1234567A)
             nric_match = re.search(r'[STFGM]\d{7}[A-Z]', extracted_text, re.IGNORECASE)
             if nric_match:
                 st.session_state.nric_no = nric_match.group(0).upper()
                 st.success(f"✓ Automatically extracted NRIC: {st.session_state.nric_no}")
             
-            # Simple fallback heuristic to grab the first non-trivial line as a possible Name
-            lines = [line.strip().upper() for line in extracted_text.split('\n') if len(line.strip()) > 3]
+            lines = [line.strip().upper() for line in results if len(line.strip()) > 3]
             if lines:
                 filtered_lines = [l for l in lines if not any(x in l for x in ["IDENTITY", "CARD", "SINGAPORE", "REPUBLIC"])]
                 if filtered_lines:
@@ -76,17 +84,17 @@ else:
 if bank_image is not None:
     try:
         img_bank = Image.open(bank_image)
+        img_bank_np = np.array(img_bank)
         with st.spinner("Extracting bank details..."):
-            extracted_bank_text = pytesseract.image_to_string(img_bank).upper()
+            results_bank = reader.readtext(img_bank_np, detail=0)
+            extracted_bank_text = " ".join(results_bank).upper()
             
-            # Look for common Singapore Banks
             common_banks = ["DBS", "POSB", "OCBC", "UOB", "HSBC", "STANDARD CHARTERED", "CITIBANK"]
             for bank in common_banks:
                 if bank in extracted_bank_text:
                     st.session_state.bank_name = bank
                     break
             
-            # Look for bank account structures (sequences of 7 to 12 digits or hyphens)
             acc_match = re.search(r'\b\d{3}[-\s]?\d{3,4}[-\s]?\d{3,4}\b|\b\d{7,12}\b', extracted_bank_text)
             if acc_match:
                 st.session_state.bank_acc = acc_match.group(0).replace(" ", "").replace("-", "")
@@ -102,7 +110,6 @@ st.markdown("---")
 st.markdown("### 📋 Application Details / 申请者资料 Fill-in")
 
 with st.form("application_form"):
-    # Particulars of Applicant
     full_name = st.text_input("Full Name as in NRIC/Passport / 身份证/护照上的全名", value=st.session_state.full_name)[cite: 1]
     nric_no = st.text_input("NRIC No / 身份证号码", value=st.session_state.nric_no)[cite: 1]
     
@@ -112,19 +119,14 @@ with st.form("application_form"):
     with col2:
         bank_account = st.text_input("Bank Account No / 銀行户口号码", value=st.session_state.bank_acc)[cite: 1]
 
-    # Automatic Date Stamp
     current_date_str = datetime.today().strftime('%Y-%m-%d')
     date_stamp = st.text_input("Date / 日期 (Auto Date-Stamped)", value=current_date_str, disabled=True)[cite: 1]
 
     st.markdown("---")
     
-    # ==========================================
-    # 3) E-SIGN COMPONENT
-    # ==========================================
     st.markdown("### 3️⃣ Signature / 签名")
     st.write("Please sign inside the box below:")
     
-    # Canvas component setup for E-sign pad
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 1)",
         stroke_width=3,
@@ -138,9 +140,6 @@ with st.form("application_form"):
 
     submitted = st.form_submit_button("VALIDATE & GENERATE DOWNLOAD")
 
-# ==========================================
-# PDF GENERATION & DOWNLOAD LOGIC
-# ==========================================
 if submitted:
     if not full_name or not nric_no or not bank_account:
         st.error("Please ensure all fields are filled out.")
@@ -149,30 +148,24 @@ if submitted:
     else:
         st.success("🎉 Verification Complete! Your download file is ready below.")
 
-        # 1. Process Canvas signature data to an in-memory PIL image
         sig_image = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
         sig_buffer = io.BytesIO()
         sig_image.save(sig_buffer, format="PNG")
         sig_buffer.seek(0)
 
-        # 2. Compile document payload into ReportLab PDF Layout
         pdf_buffer = io.BytesIO()
         doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
         story = []
-        styles = getSampleStyleSheet()
 
-        # Custom branding styles
         title_style = ParagraphStyle(name='TitleStyle', fontName='Helvetica-Bold', fontSize=18, textColor=colors.HexColor("#78350f"), alignment=1)
         subtitle_style = ParagraphStyle(name='SubTitleStyle', fontName='Helvetica', fontSize=9, textColor=colors.gray, alignment=1)
         label_style = ParagraphStyle(name='LabelStyle', fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor("#1f2937"))
         value_style = ParagraphStyle(name='ValueStyle', fontName='Helvetica', fontSize=11, textColor=colors.black)
 
-        # Header Structure
         story.append(Paragraph("NIRVANA MEMORIAL GARDEN PTE. LTD.", title_style))
         story.append(Paragraph("SERVICE ADVISOR APPLICATION FORM (NV-SG-CSD-F01 Rev.2)", subtitle_style))
         story.append(Spacer(1, 25))
 
-        # Form Data Grid Matrix
         data = [
             [Paragraph("Full Name as in NRIC / Passport:", label_style), Paragraph(full_name, value_style)][cite: 1],
             [Paragraph("NRIC / Passport No:", label_style), Paragraph(nric_no, value_style)][cite: 1],
@@ -191,18 +184,15 @@ if submitted:
         story.append(t)
         story.append(Spacer(1, 30))
 
-        # Append E-Signature Image Elements
         story.append(Paragraph("Applicant Signature / Authorization Stamp:", label_style))
         story.append(Spacer(1, 5))
         rl_sig_img = RLImage(sig_buffer, width=200, height=75)
         rl_sig_img.hAlign = 'LEFT'
         story.append(rl_sig_img)
 
-        # Build Document
         doc.build(story)
         pdf_data = pdf_buffer.getvalue()
 
-        # 3. Present UI Interactive Download Widget Button
         st.download_button(
             label="📥 Download Completed PDF Form",
             data=pdf_data,
