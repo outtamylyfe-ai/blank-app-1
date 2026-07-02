@@ -5,7 +5,7 @@ from PIL import Image
 import re
 import io
 from datetime import datetime
-from streamlit_canvas import st_canvas
+from streamlit_drawable_canvas import st_canvas
 
 # PDF Generation imports
 from reportlab.lib.pagesizes import letter
