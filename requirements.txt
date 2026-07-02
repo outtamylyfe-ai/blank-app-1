@@ -1,5 +1,5 @@
 streamlit
 pytesseract
 pillow
-streamlit-shadow-canvas
+streamlit-canvas
 reportlab
