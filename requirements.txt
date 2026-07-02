@@ -1,5 +1,6 @@
 streamlit
-pytesseract
+easyocr
+numpy
 pillow
 streamlit-drawable-canvas
 reportlab
