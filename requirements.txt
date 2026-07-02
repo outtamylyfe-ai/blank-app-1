@@ -4,3 +4,4 @@ numpy
 pillow
 streamlit-drawable-canvas
 reportlab
+pypdf
