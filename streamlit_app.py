@@ -11,6 +11,7 @@ from streamlit_drawable_canvas import st_canvas
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.utils import ImageReader  # Added to wrap BytesIO properly
 
 # Set page configuration
 st.set_page_config(page_title="Nirvana Service Advisor Onboarding", layout="centered")
@@ -182,13 +183,15 @@ if submitted:
             sig_image.save(sig_buffer, format="PNG")
             sig_buffer.seek(0)
 
-            # 2. Draw standard form inputs onto an transparent temporary ReportLab PDF
+            # Wrap BytesIO in an ImageReader instance for ReportLab canvas
+            reportlab_io_img = ImageReader(sig_buffer)
+
+            # 2. Draw standard form inputs onto a transparent temporary ReportLab PDF
             packet = io.BytesIO()
-            # letter size is 612 x 792 points
             can = canvas.Canvas(packet, pagesize=letter)
             can.setFont("Helvetica", 9)
 
-            # Coordinates mapping table (approximate to match image placements)
+            # Coordinates mapping table
             can.drawString(110, 688, upline_name)
             can.drawString(410, 688, upline_nric)
             can.drawString(110, 668, upline_code)
@@ -222,8 +225,8 @@ if submitted:
             
             can.drawString(410, 260, current_date_str)
 
-            # Draw Signature Image onto form template target using bytes buffer directly
-            can.drawImage(sig_buffer, 60, 180, width=120, height=50, mask='auto')
+            # Draw Signature Image using ImageReader wrapper
+            can.drawImage(reportlab_io_img, 60, 180, width=120, height=50, mask='auto')
             
             can.save()
             packet.seek(0)
