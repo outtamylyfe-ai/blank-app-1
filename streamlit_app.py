@@ -16,6 +16,13 @@ from reportlab.lib import colors
 # Set page configuration
 st.set_page_config(page_title="Nirvana Service Advisor Onboarding", layout="centered")
 
+# Helper function to remove Chinese/Non-Latin characters to prevent ReportLab Helvetica crash
+def clean_pdf_text(text):
+    if not text:
+        return ""
+    # Keeps alphanumeric, punctuation, spaces, and removes characters out of standard latin range
+    return re.sub(r'[^\x00-\x7F]+', '', text).strip()
+
 # Initialize EasyOCR Reader (cached so it only loads once)
 @st.cache_resource
 def load_ocr():
@@ -110,17 +117,17 @@ st.markdown("---")
 st.markdown("### 📋 Application Details / 申请者资料 Fill-in")
 
 with st.form("application_form"):
-    full_name = st.text_input("Full Name as in NRIC/Passport / 身份证/护照上的全名", value=st.session_state.full_name)[cite: 1]
-    nric_no = st.text_input("NRIC No / 身份证号码", value=st.session_state.nric_no)[cite: 1]
+    full_name = st.text_input("Full Name as in NRIC/Passport / 身份证/护照上的全名", value=st.session_state.full_name)
+    nric_no = st.text_input("NRIC No / 身份证号码", value=st.session_state.nric_no)
     
     col1, col2 = st.columns(2)
     with col1:
-        bank_name = st.text_input("Bank Name / 銀行名稱", value=st.session_state.bank_name)[cite: 1]
+        bank_name = st.text_input("Bank Name / 銀行名稱", value=st.session_state.bank_name)
     with col2:
-        bank_account = st.text_input("Bank Account No / 銀行户口号码", value=st.session_state.bank_acc)[cite: 1]
+        bank_account = st.text_input("Bank Account No / 銀行户口号码", value=st.session_state.bank_acc)
 
     current_date_str = datetime.today().strftime('%Y-%m-%d')
-    date_stamp = st.text_input("Date / 日期 (Auto Date-Stamped)", value=current_date_str, disabled=True)[cite: 1]
+    date_stamp = st.text_input("Date / 日期 (Auto Date-Stamped)", value=current_date_str, disabled=True)
 
     st.markdown("---")
     
@@ -166,12 +173,13 @@ if submitted:
         story.append(Paragraph("SERVICE ADVISOR APPLICATION FORM (NV-SG-CSD-F01 Rev.2)", subtitle_style))
         story.append(Spacer(1, 25))
 
+        # Using clean_pdf_text to protect Helvetica against non-latin character errors
         data = [
-            [Paragraph("Full Name as in NRIC / Passport:", label_style), Paragraph(full_name, value_style)][cite: 1],
-            [Paragraph("NRIC / Passport No:", label_style), Paragraph(nric_no, value_style)][cite: 1],
-            [Paragraph("Bank Account Provider Name:", label_style), Paragraph(bank_name, value_style)][cite: 1],
-            [Paragraph("Bank Account Number:", label_style), Paragraph(bank_account, value_style)][cite: 1],
-            [Paragraph("Application Date (Stamped):", label_style), Paragraph(date_stamp, value_style)][cite: 1]
+            [Paragraph("Full Name as in NRIC / Passport:", label_style), Paragraph(clean_pdf_text(full_name), value_style)],
+            [Paragraph("NRIC / Passport No:", label_style), Paragraph(clean_pdf_text(nric_no), value_style)],
+            [Paragraph("Bank Account Provider Name:", label_style), Paragraph(clean_pdf_text(bank_name), value_style)],
+            [Paragraph("Bank Account Number:", label_style), Paragraph(clean_pdf_text(bank_account), value_style)],
+            [Paragraph("Application Date (Stamped):", label_style), Paragraph(clean_pdf_text(date_stamp), value_style)]
         ]
 
         t = Table(data, colWidths=[200, 300])
