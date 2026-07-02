@@ -11,7 +11,6 @@ from streamlit_drawable_canvas import st_canvas
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import Image as RLImage
 
 # Set page configuration
 st.set_page_config(page_title="Nirvana Service Advisor Onboarding", layout="centered")
@@ -190,7 +189,6 @@ if submitted:
             can.setFont("Helvetica", 9)
 
             # Coordinates mapping table (approximate to match image placements)
-            # Adjust these numbers if needed to tweak the exact pixel box positions
             can.drawString(110, 688, upline_name)
             can.drawString(410, 688, upline_nric)
             can.drawString(110, 668, upline_code)
@@ -224,8 +222,8 @@ if submitted:
             
             can.drawString(410, 260, current_date_str)
 
-            # Draw Signature Image onto form template target
-            can.drawImage(RLImage(sig_buffer), 60, 180, width=120, height=50, mask='auto')
+            # Draw Signature Image onto form template target using bytes buffer directly
+            can.drawImage(sig_buffer, 60, 180, width=120, height=50, mask='auto')
             
             can.save()
             packet.seek(0)
